@@ -1,0 +1,40 @@
+RID	y_no(b=-0.0850)	y_yes(b=0.4483)	Support	Rule
+(-1, 5)	0.6470	-0.7101	0.0784	month_nov & day > 16.756
+(-1, 6)	0.5402	-0.4834	0.2419	contact_unknown & duration <= 426.683
+(-1, 23)	0.4262	-0.4495	0.8754	~month_mar & ~poutcome_success & duration <= 622.818
+(-1, 10)	0.4041	-0.3308	0.2817	month_may & duration <= 622.818
+(-1, 2)	0.3241	-0.3579	0.1391	month_aug
+(-1, 7)	0.3466	-0.2639	0.3724	duration <= 138.136
+(-1, 20)	0.2275	-0.3136	0.4566	housing_yes & ~poutcome_success & duration <= 426.683
+(-1, 27)	0.2549	-0.3013	0.1797	month_jan | duration <= 75.726
+(-1, 35)	0.2788	-0.2870	0.6128	contact_unknown | month_feb | month_jul | duration <= 104.470
+(-1, 26)	0.1565	-0.2748	0.0286	job_housemaid
+(-1, 18)	0.2687	-0.2508	0.1212	month_jul & duration <= 426.683
+(-1, 34)	0.2372	-0.2017	0.3724	duration <= 138.136
+(-1, 37)	-0.2351	0.2350	0.8159	marital_single | duration > 426.683 | previous > 0.297 | campaign <= 2.714
+(-1, 36)	0.2277	-0.2078	0.4348	job_blue-collar | contact_unknown | month_jan
+(-1, 3)	0.2008	-0.2197	0.6193	poutcome_unknown & ~education_unknown & age <= 57.528 & duration <= 426.683
+(-1, 29)	-0.1819	0.2194	0.1181	month_jun
+(-1, 19)	-0.1783	0.2186	0.0138	month_sep
+(-1, 9)	-0.2056	0.1966	0.0283	poutcome_success & duration > 138.136
+(-1, 25)	-0.2003	0.1930	0.3665	~housing_yes & ~contact_unknown
+(-1, 28)	0.1892	-0.1743	0.9634	~poutcome_success
+(-1, 33)	-0.1039	0.1745	0.2125	age > 57.528 | duration > 426.683
+(-1, 32)	0.1183	-0.1721	0.4357	contact_unknown | pdays > 97.011
+(-1, 24)	0.1708	-0.1578	0.8513	~month_oct & balance <= 2827.654
+(-1, 11)	0.1319	-0.1649	0.6006	marital_married
+(-1, 14)	0.1259	-0.1619	0.0426	job_technician & month_aug
+(-1, 22)	0.1615	-0.1126	0.3955	~education_tertiary & ~poutcome_success & age > 34.083 & duration <= 426.683
+(-1, 16)	-0.0569	0.1600	0.0366	poutcome_success
+(-1, 15)	-0.0940	0.1507	0.8459	duration > 75.726
+(-1, 1)	0.1283	-0.1392	0.4805	balance <= 630.330 & duration <= 426.683
+(-1, 30)	-0.1026	0.0607	0.1933	duration > 622.818 | previous > 1.786
+(-1, 21)	-0.0077	0.1021	0.2964	~housing_yes & ~month_aug & ~month_may
+(-1, 12)	0.0826	-0.0189	0.5033	housing_yes & ~month_mar & duration <= 622.818
+(-1, 13)	0.0705	0.0632	0.2542	duration <= 104.470
+(-1, 17)	0.0704	0.0644	0.0424	education_unknown
+(-1, 31)	-0.0642	0.0159	0.6099	~poutcome_unknown | duration > 622.818 | age <= 38.549
+(-1, 4)	0.0384	-0.0085	0.2022	contact_unknown & age > 34.083
+(-1, 8)	-0.0176	-0.0200	0.0930	job_services
+(-1, 0)	-0.0001	-0.0066	0.1541	duration <= 75.726
+############################################################

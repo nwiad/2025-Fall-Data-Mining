@@ -1,0 +1,12 @@
+RID	y_no(b=2.1706)	y_yes(b=-1.8702)	Support	Rule
+(-1, 7)	1.9609	-1.9607	0.6262	~job_student & ~month_dec & ~month_feb & ~month_mar & ~month_oct & ~month_sep & ~poutcome_success & duration <= 426.683 & pdays <= 39.144
+(-1, 9)	-1.6427	1.6413	0.2154	~housing_yes & ~loan_yes & ~contact_unknown & duration > 104.470 & duration <= 622.818
+(-1, 1)	-1.4986	1.4989	0.5901	~job_housemaid & ~month_jan & duration > 138.136
+(-1, 6)	1.4100	-1.4103	0.8113	~month_mar & ~month_oct & ~poutcome_success & age <= 57.528 & duration <= 622.818
+(-1, 5)	1.1454	-1.1466	0.7564	~month_jun & ~month_mar & ~month_oct & ~poutcome_success & duration <= 622.818
+(-1, 8)	-1.0480	1.0459	0.1559	~job_blue-collar & ~contact_unknown & ~month_aug & ~month_jul & ~month_nov & day > 8.288 & duration > 75.726
+(-1, 0)	0.9535	-0.9535	0.8116	~poutcome_success & duration <= 426.683
+(-1, 3)	-0.8513	0.8513	0.4291	~contact_telephone & ~month_feb & ~month_jul & ~month_nov & duration > 138.136
+(-1, 4)	0.6383	-0.6359	0.8853	~poutcome_success & duration <= 622.818
+(-1, 2)	-0.5514	0.5525	0.5832	~month_may & duration > 75.726
+############################################################

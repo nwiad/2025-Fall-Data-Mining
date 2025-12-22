@@ -1,0 +1,11 @@
+RID	y_no(b=-0.2807)	y_yes(b=0.7518)	Support	Rule
+(-1, 3)	-0.9378	0.9802	0.0283	poutcome_success & duration > 138.136
+(-1, 2)	0.5709	-0.6096	0.9197	duration <= 622.818
+(-1, 7)	0.4799	-0.4338	0.9107	housing_yes | contact_unknown | month_aug | month_feb | month_jul | month_nov | duration > 622.818 | duration <= 75.726
+(-1, 5)	-0.4163	0.4177	0.6276	duration > 138.136
+(-1, 1)	0.4005	-0.3616	0.8432	duration <= 426.683
+(-1, 6)	0.2781	-0.3125	0.4464	contact_unknown | month_jan | month_may
+(-1, 8)	0.3124	-0.2500	0.7444	job_blue-collar | contact_unknown | month_jan | month_jul | month_nov | duration > 622.818 | duration <= 104.470
+(-1, 4)	0.2601	-0.3099	0.6478	age <= 57.528 & duration <= 426.683 & pdays <= 39.144 & previous <= 1.786
+(-1, 0)	0.1119	-0.1192	0.6006	marital_married
+############################################################

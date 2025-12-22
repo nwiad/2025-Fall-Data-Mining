@@ -1,0 +1,10 @@
+RID	y_no(b=0.0294)	y_yes(b=-0.1731)	Support	Rule
+(-1, 4)	-0.7814	0.8269	0.2347	job_student | month_mar | month_oct | month_sep | poutcome_success | age > 61.604 | duration > 442.610
+(-1, 2)	0.3935	-0.4161	0.4697	housing_yes & duration <= 442.610
+(-1, 0)	0.3232	-0.3050	0.6963	poutcome_unknown & duration <= 442.610 & previous <= 4.918
+(-1, 5)	0.2746	-0.2246	0.4603	loan_yes | contact_telephone | contact_unknown
+(-1, 7)	0.2386	-0.2718	0.7497	job_blue-collar | contact_unknown | month_aug | month_jan | month_jul | month_nov
+(-1, 6)	0.2457	-0.2596	0.4595	contact_unknown | month_jan | month_jul
+(-1, 3)	0.1907	-0.1092	0.8514	duration <= 442.610
+(-1, 1)	0.1614	0.0185	0.6006	marital_married
+############################################################
