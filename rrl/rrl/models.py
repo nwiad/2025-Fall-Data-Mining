@@ -95,7 +95,7 @@ class MyDistributedDataParallel(torch.nn.parallel.DistributedDataParallel):
 class RRL:
     def __init__(self, dim_list, device_id, use_not=False, is_rank0=False, log_file=None, writer=None, left=None,
                  right=None, save_best=False, estimated_grad=False, save_path=None, distributed=True, use_skip=False, 
-                 use_nlaf=False, alpha=0.999, beta=8, gamma=1, temperature=0.01):
+                 use_nlaf=False, alpha=0.999, beta=8, gamma=1, temperature=0.01, task_type='classification'):
         super(RRL, self).__init__()
         self.dim_list = dim_list
         self.use_not = use_not
@@ -104,7 +104,15 @@ class RRL:
         self.alpha =alpha
         self.beta = beta
         self.gamma = gamma
-        self.best_f1 = -1.
+        self.task_type = task_type
+        # 不同任务类型 best_f1 初始值不一样
+        if self.task_type == 'classification':
+            self.best_f1 = -1.0
+        elif self.task_type == 'regression':  # regression 用 R2，可能为很小的负数
+            self.best_f1 = -1e20
+        else:
+            self.best_f1 = -1.0
+            
         self.best_loss = 1e20
 
         self.device_id = device_id
@@ -121,6 +129,7 @@ class RRL:
                 logging.basicConfig(level=logging.DEBUG, stream=sys.stdout, format=log_format)
             else:
                 logging.basicConfig(level=logging.DEBUG, filename=log_file, filemode='w', format=log_format)
+        logging.info('------ ------ task type is {} ------ ------'.format(self.task_type))
         self.writer = writer
 
         self.net = Net(dim_list, use_not=use_not, left=left, right=right, use_nlaf=use_nlaf, estimated_grad=estimated_grad, use_skip=use_skip, alpha=alpha, beta=beta, gamma=gamma, temperature=temperature)
@@ -183,7 +192,13 @@ class RRL:
         accuracy_b = []
         f1_score_b = []
 
-        criterion = nn.CrossEntropyLoss().cuda(self.device_id)
+        # === 根据任务类型选择 loss ===
+        if self.task_type == 'classification':
+            criterion = nn.CrossEntropyLoss().cuda(self.device_id)
+        else:
+            # 回归：用 MSELoss
+            criterion = nn.MSELoss().cuda(self.device_id)
+            
         optimizer = torch.optim.Adam(self.net.parameters(), lr=lr, weight_decay=0.0)
 
         cnt = -1
@@ -204,11 +219,26 @@ class RRL:
                 y = y.cuda(self.device_id, non_blocking=True)
                 optimizer.zero_grad()  # Zero the gradient buffers.
                 
-                # trainable softmax temperature
-                y_bar = self.net.forward(X) / torch.exp(self.net.t)
-                y_arg = torch.argmax(y, dim=1)
+                # ---------- 前向 & 损失 ----------
+                if self.task_type == 'classification':
+                    # 原始逻辑：输出 logits / 温度缩放
+                    y_bar = self.net.forward(X) / torch.exp(self.net.t)
+                    # y 是 one-hot，取 argmax 得到类别 id
+                    y_arg = torch.argmax(y, dim=1)
+                    loss_rrl = criterion(y_bar, y_arg) + weight_decay * self.l2_penalty()
+                else:
+                    # 回归：直接输出连续值
+                    y_pred = self.net.forward(X)
+                    # 形状对齐：都变成 (batch, 1) 或 (batch,)
+                    if y_pred.shape != y.shape:
+                        y = y.view_as(y_pred)
+                    loss_rrl = criterion(y_pred, y) + weight_decay * self.l2_penalty()
+
+                # # trainable softmax temperature
+                # y_bar = self.net.forward(X) / torch.exp(self.net.t)
+                # y_arg = torch.argmax(y, dim=1)
                 
-                loss_rrl = criterion(y_bar, y_arg) + weight_decay * self.l2_penalty()
+                # loss_rrl = criterion(y_bar, y_arg) + weight_decay * self.l2_penalty()
                 
                 ba_loss_rrl = loss_rrl.item()
                 epoch_loss_rrl += ba_loss_rrl
@@ -221,7 +251,7 @@ class RRL:
                     if self.is_rank0 and cnt % log_iter == 0 and cnt != 0 and self.writer is not None:
                         self.writer.add_scalar('Avg_Batch_Loss_GradGrafting', avg_batch_loss_rrl / log_iter, cnt)
                         edge_p = self.edge_penalty().item()
-                        self.writer.add_scalar('Edge_penalty/Log', np.log(edge_p), cnt)
+                        self.writer.add_scalar('Edge_penalty/Log', np.log(max(edge_p, 1e-8)), cnt)
                         self.writer.add_scalar('Edge_penalty/Origin', edge_p, cnt)
                         avg_batch_loss_rrl = 0.0
 
@@ -229,8 +259,16 @@ class RRL:
                 
                 if self.is_rank0:
                     for i, param in enumerate(self.net.parameters()):
-                        abs_gradient_max = max(abs_gradient_max, abs(torch.max(param.grad)))
-                        abs_gradient_avg += torch.sum(torch.abs(param.grad)) / (param.grad.numel())
+                        if param.grad is None:
+                            continue  # 这一层这次没梯度，跳过
+
+                        # 最大梯度
+                        abs_gradient_max = max(
+                            abs_gradient_max,
+                            torch.max(torch.abs(param.grad)).item()
+                        )
+                        # 平均梯度
+                        abs_gradient_avg += torch.sum(torch.abs(param.grad)) / param.grad.numel()
                 self.clip()
 
                 if self.is_rank0 and (cnt % (TEST_CNT_MOD * (1 if self.save_best else 10)) == 0):
@@ -238,7 +276,7 @@ class RRL:
                         acc_b, f1_b = self.test(test_loader=valid_loader, set_name='Validation')
                     else: # use the data_loader as the valid loader
                         acc_b, f1_b = self.test(test_loader=data_loader, set_name='Training')
-                    
+                    # 对于 classification，f1_b 是 F1；对于 regression，让 f1_b = R2
                     if self.save_best and (f1_b > self.best_f1 or (np.abs(f1_b - self.best_f1) < 1e-10 and self.best_loss > epoch_loss_rrl)):
                         self.best_f1 = f1_b
                         self.best_loss = epoch_loss_rrl
@@ -247,8 +285,12 @@ class RRL:
                     accuracy_b.append(acc_b)
                     f1_score_b.append(f1_b)
                     if self.writer is not None:
+                        # 名字可以不改，知道含义：
+                        # classification: Accuracy/F1
+                        # regression: Accuracy=R2, F1=R2（或者 Accuracy=-MSE）
                         self.writer.add_scalar('Accuracy_RRL', acc_b, cnt // TEST_CNT_MOD)
                         self.writer.add_scalar('F1_Score_RRL', f1_b, cnt // TEST_CNT_MOD)
+                        
             if self.is_rank0:
                 logging.info('epoch: {}, loss_rrl: {}'.format(epo, epoch_loss_rrl))
                 if self.writer is not None:
@@ -263,44 +305,129 @@ class RRL:
     def test(self, test_loader=None, set_name='Validation'):
         if test_loader is None:
             raise Exception("Data loader is unavailable!")
-        
-        y_list = []
-        for X, y in test_loader:
-            y_list.append(y)
-        y_true = torch.cat(y_list, dim=0)
-        y_true = y_true.cpu().numpy().astype(int)
-        y_true = np.argmax(y_true, axis=1)
-        data_num = y_true.shape[0]
 
-        slice_step = data_num // 40 if data_num >= 40 else 1
-        logging.debug('y_true: {} {}'.format(y_true.shape, y_true[:: slice_step]))
+        # ========== 分类任务：保留原有逻辑 ==========
+        if self.task_type == 'classification':
+            y_list = []
+            for X, y in test_loader:
+                y_list.append(y)
+            y_true = torch.cat(y_list, dim=0)
+            y_true = y_true.cpu().numpy().astype(int)
+            y_true = np.argmax(y_true, axis=1)
+            data_num = y_true.shape[0]
 
-        y_pred_b_list = []
+            slice_step = data_num // 40 if data_num >= 40 else 1
+            logging.debug('y_true: {} {}'.format(y_true.shape, y_true[:: slice_step]))
+
+            y_pred_b_list = []
+            for X, y in test_loader:
+                X = X.cuda(self.device_id, non_blocking=True)
+                output = self.net.forward(X)
+                y_pred_b_list.append(output)
+
+            y_pred_b = torch.cat(y_pred_b_list).cpu().numpy()
+            y_pred_b_arg = np.argmax(y_pred_b, axis=1)
+            logging.debug('y_rrl_: {} {}'.format(y_pred_b_arg.shape, y_pred_b_arg[:: slice_step]))
+            logging.debug('y_rrl: {} {}'.format(y_pred_b.shape, y_pred_b[:: (slice_step)]))
+
+            accuracy_b = metrics.accuracy_score(y_true, y_pred_b_arg)
+            f1_score_b = metrics.f1_score(y_true, y_pred_b_arg, average='macro')
+
+            logging.info('-' * 60)
+            logging.info(
+                'On {} Set:\n\tAccuracy of RRL  Model: {}'
+                '\n\tF1 Score of RRL  Model: {}'.format(set_name, accuracy_b, f1_score_b)
+            )
+            logging.info(
+                'On {} Set:\nPerformance of  RRL Model: \n{}\n{}'.format(
+                    set_name,
+                    metrics.confusion_matrix(y_true, y_pred_b_arg),
+                    metrics.classification_report(y_true, y_pred_b_arg),
+                )
+            )
+            logging.info('-' * 60)
+
+            return accuracy_b, f1_score_b
+
+        # ========== 回归任务：新的逻辑 ==========
+        y_true_list = []
+        y_pred_list = []
+
         for X, y in test_loader:
             X = X.cuda(self.device_id, non_blocking=True)
+            y = y.cuda(self.device_id, non_blocking=True)
+
             output = self.net.forward(X)
-            y_pred_b_list.append(output)
 
-        y_pred_b = torch.cat(y_pred_b_list).cpu().numpy()
-        y_pred_b_arg = np.argmax(y_pred_b, axis=1)
-        logging.debug('y_rrl_: {} {}'.format(y_pred_b_arg.shape, y_pred_b_arg[:: slice_step]))
-        logging.debug('y_rrl: {} {}'.format(y_pred_b.shape, y_pred_b[:: (slice_step)]))
+            # 展平成 1D
+            y_true_list.append(y.view(-1).cpu().numpy())
+            y_pred_list.append(output.view(-1).cpu().numpy())
 
-        accuracy_b = metrics.accuracy_score(y_true, y_pred_b_arg)
-        f1_score_b = metrics.f1_score(y_true, y_pred_b_arg, average='macro')
+        y_true = np.concatenate(y_true_list)
+        y_pred = np.concatenate(y_pred_list)
+
+        mse = metrics.mean_squared_error(y_true, y_pred)
+        mae = metrics.mean_absolute_error(y_true, y_pred)
+        r2 = metrics.r2_score(y_true, y_pred)
 
         logging.info('-' * 60)
-        logging.info('On {} Set:\n\tAccuracy of RRL  Model: {}'
-                        '\n\tF1 Score of RRL  Model: {}'.format(set_name, accuracy_b, f1_score_b))
-        logging.info('On {} Set:\nPerformance of  RRL Model: \n{}\n{}'.format(
-            set_name, metrics.confusion_matrix(y_true, y_pred_b_arg), metrics.classification_report(y_true, y_pred_b_arg)))
+        logging.info(
+            'On {} Set (Regression):'
+            '\n\tMSE of RRL  Model: {}'
+            '\n\tMAE of RRL  Model: {}'
+            '\n\tR2  of RRL  Model: {}'.format(set_name, mse, mae, r2)
+        )
         logging.info('-' * 60)
 
+        # 为了兼容 train_model 里使用 (acc_b, f1_b) 的地方：
+        # 这里我们令 acc_b = r2, f1_b = r2（这样 f1_b 越大越好）
+        accuracy_b = r2
+        f1_score_b = r2
         return accuracy_b, f1_score_b
+
+
+    # @torch.no_grad()
+    # def test(self, test_loader=None, set_name='Validation'):
+    #     if test_loader is None:
+    #         raise Exception("Data loader is unavailable!")
+        
+    #     y_list = []
+    #     for X, y in test_loader:
+    #         y_list.append(y)
+    #     y_true = torch.cat(y_list, dim=0)
+    #     y_true = y_true.cpu().numpy().astype(int)
+    #     y_true = np.argmax(y_true, axis=1)
+    #     data_num = y_true.shape[0]
+
+    #     slice_step = data_num // 40 if data_num >= 40 else 1
+    #     logging.debug('y_true: {} {}'.format(y_true.shape, y_true[:: slice_step]))
+
+    #     y_pred_b_list = []
+    #     for X, y in test_loader:
+    #         X = X.cuda(self.device_id, non_blocking=True)
+    #         output = self.net.forward(X)
+    #         y_pred_b_list.append(output)
+
+    #     y_pred_b = torch.cat(y_pred_b_list).cpu().numpy()
+    #     y_pred_b_arg = np.argmax(y_pred_b, axis=1)
+    #     logging.debug('y_rrl_: {} {}'.format(y_pred_b_arg.shape, y_pred_b_arg[:: slice_step]))
+    #     logging.debug('y_rrl: {} {}'.format(y_pred_b.shape, y_pred_b[:: (slice_step)]))
+
+    #     accuracy_b = metrics.accuracy_score(y_true, y_pred_b_arg)
+    #     f1_score_b = metrics.f1_score(y_true, y_pred_b_arg, average='macro')
+
+    #     logging.info('-' * 60)
+    #     logging.info('On {} Set:\n\tAccuracy of RRL  Model: {}'
+    #                     '\n\tF1 Score of RRL  Model: {}'.format(set_name, accuracy_b, f1_score_b))
+    #     logging.info('On {} Set:\nPerformance of  RRL Model: \n{}\n{}'.format(
+    #         set_name, metrics.confusion_matrix(y_true, y_pred_b_arg), metrics.classification_report(y_true, y_pred_b_arg)))
+    #     logging.info('-' * 60)
+
+    #     return accuracy_b, f1_score_b
 
     def save_model(self):
         rrl_args = {'dim_list': self.dim_list, 'use_not': self.use_not, 'use_skip': self.use_skip, 'estimated_grad': self.estimated_grad, 
-                    'use_nlaf': self.use_nlaf, 'alpha': self.alpha, 'beta': self.beta, 'gamma': self.gamma}
+                    'use_nlaf': self.use_nlaf, 'alpha': self.alpha, 'beta': self.beta, 'gamma': self.gamma, 'task_type': self.task_type}
         torch.save({'model_state_dict': self.net.state_dict(), 'rrl_args': rrl_args}, self.save_path)
 
     def detect_dead_node(self, data_loader=None):
@@ -331,25 +458,47 @@ class RRL:
             skip_rule_name = None if layer.conn.skip_from_layer is None else layer.conn.skip_from_layer.rule_name
             wrap_prev_rule = False if i == 1 else True  # do not warp the bound_name
             layer.get_rule_description((skip_rule_name, layer.conn.prev_layer.rule_name), wrap=wrap_prev_rule)
-
-        # for LR Layr
+        
+        # for LR Layer
         layer = self.net.layer_list[-1]
         layer.get_rule2weights(layer.conn.prev_layer, layer.conn.skip_from_layer)
-        
+
+        # 实际输出维度（回归时一般是 1，分类时是 #classes）
+        out_dim = len(layer.bl)
+
         if not display:
             return layer.rule2weights
-        
+
         print('RID', end='\t', file=file)
-        for i, ln in enumerate(label_name):
+        # 头部：根据实际输出维度打印 bias
+        for i in range(out_dim):
+            # 如果 label_name 比较长，只用前 out_dim 个；不够就用 y0,y1...
+            if isinstance(label_name, (list, tuple)):
+                if i < len(label_name):
+                    ln = label_name[i]
+                else:
+                    ln = f'y{i}'
+            else:
+                # label_name 不是列表（比如字符串），就用同一个名字或占位
+                ln = label_name if i == 0 else f'y{i}'
             print('{}(b={:.4f})'.format(ln, layer.bl[i]), end='\t', file=file)
         print('Support\tRule', file=file)
+
+        # 逐条规则打印权重
         for rid, w in layer.rule2weights:
             print(rid, end='\t', file=file)
-            for li in range(len(label_name)):
+            for li in range(out_dim):
                 print('{:.4f}'.format(w[li]), end='\t', file=file)
             now_layer = self.net.layer_list[-1 + rid[0]]
-            print('{:.4f}'.format((now_layer.node_activation_cnt[layer.rid2dim[rid]] / now_layer.forward_tot).item()),
-                  end='\t', file=file)
+            print(
+                '{:.4f}'.format(
+                    (now_layer.node_activation_cnt[layer.rid2dim[rid]] /
+                    now_layer.forward_tot).item()
+                ),
+                end='\t',
+                file=file
+            )
             print(now_layer.rule_name[rid[1]], end='\n', file=file)
         print('#' * 60, file=file)
         return layer.rule2weights
+

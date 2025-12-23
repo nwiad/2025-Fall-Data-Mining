@@ -13,10 +13,11 @@ python3 experiment.py \
     -s 5@64 \
     -e 100 \
     -lrde 200 \
-    -lr 0.002 \
+    -lr 0.005 \
     -ki 0 \
     -i ${WORLD_SIZE_8} \
     -wd 0.0001 \
+    --task_type "regression"\
     --print_rule \
     --master_address "127.0.0.1" \
     --master_port 12345 \

@@ -27,6 +27,7 @@ parser.add_argument('--beta', type=int, default=8, help='Set the beta for NLAF.'
 parser.add_argument('--gamma', type=int, default=1, help='Set the gamma for NLAF.')
 
 parser.add_argument('--temp', type=float, default=1.0, help='Set the temperature.')
+parser.add_argument('--task_type', type=str, default='classification', help='classfication or regression.')
 
 parser.add_argument('--use_not', action="store_true",
                     help='Use the NOT (~) operator in logical rules. '
@@ -49,7 +50,7 @@ rrl_args = parser.parse_args()
 rrl_args.folder_name = '{}_e{}_bs{}_lr{}_lrdr{}_lrde{}_wd{}_ki{}_rc{}_useNOT{}_saveBest{}_useNLAF{}_estimatedGrad{}_useSkip{}_alpha{}_beta{}_gamma{}_temp{}'.format(
     rrl_args.data_set, rrl_args.epoch, rrl_args.batch_size, rrl_args.learning_rate, rrl_args.lr_decay_rate,
     rrl_args.lr_decay_epoch, rrl_args.weight_decay, rrl_args.ith_kfold, rrl_args.round_count, rrl_args.use_not,
-    rrl_args.save_best, rrl_args.nlaf, rrl_args.estimated_grad, rrl_args.skip, rrl_args.alpha, rrl_args.beta, rrl_args.gamma, rrl_args.temp)
+    rrl_args.save_best, rrl_args.nlaf, rrl_args.estimated_grad, rrl_args.skip, rrl_args.alpha, rrl_args.beta, rrl_args.gamma, rrl_args.temp, rrl_args.task_type)
 
 if not os.path.exists('log_folder'):
     os.mkdir('log_folder')
