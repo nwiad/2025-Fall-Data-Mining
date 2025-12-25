@@ -167,7 +167,7 @@ def train_model(gpu, args):
               beta=args.beta,
               gamma=args.gamma,
               temperature=args.temp,
-              task_type='regression')
+              task_type=args.task_type)
     print('init model done')
 
     rrl.train_model(
@@ -201,10 +201,16 @@ def load_model(path, device_id, log_file=None, distributed=True):
         gamma=saved_args['gamma'],
         task_type=task_type)
     stat_dict = checkpoint['model_state_dict']
-    for key in list(stat_dict.keys()):
-        # remove 'module.' prefix
-        stat_dict[key[7:]] = stat_dict.pop(key)
-    rrl.net.load_state_dict(checkpoint['model_state_dict'])
+    # Remove DDP "module." prefix if present.
+    cleaned_state = {}
+    for key, value in stat_dict.items():
+        if key.startswith('module.'):
+            cleaned_state[key[7:]] = value
+        else:
+            cleaned_state[key] = value
+    rrl.net.load_state_dict(cleaned_state)
+    
+    
     return rrl
 
 def evaluate_regression(rrl, test_loader, device_id):

@@ -47,9 +47,27 @@ $ python scripts/baseline_housing_regression.py
 
 ```
 
-### 2.2 
-目前R2还是不正常
+### 2.2 调了一些参数，写在脚本里面
 
+目前最好的参数是
 
-[Test Regression] MSE=426.6449, MAE=19.0196, R2=-5.5610
-[Structure] #Edges = 48, Log(#Edges+eps) = 3.8712
+```
+[Test Regression] MSE=11.6421, MAE=2.7883, R2=0.8210
+[Structure] #Edges = 549, Log(#Edges+eps) = 6.3081
+python3 experiment.py \
+    -d housing_train_v1 \
+    -bs 4 \
+    -s 5@64 \
+    -e 100 \
+    -lrde 200 \
+    -lr 0.005 \
+    -ki 0 \
+    -i ${WORLD_SIZE_2} \
+    -wd 0.0001 \
+    --task_type "regression"\
+    --print_rule \
+    --master_address "127.0.0.1" \
+    --master_port 12345 \
+    --save_best \
+    --use_not
+```

@@ -1,0 +1,5 @@
+2025-12-25 15:29:42,915 - [INFO] - ------ ------ task type is regression ------ ------
+2025-12-25 15:29:43,502 - [INFO] - 
+	Regression metrics on Test set: MSE=13.1455, MAE=2.6763, R2=0.7978
+2025-12-25 15:29:43,667 - [INFO] - 
+	Log(#Edges) of RRL  Model: 6.016157159698353
