@@ -285,7 +285,6 @@ class RRL:
                     accuracy_b.append(acc_b)
                     f1_score_b.append(f1_b)
                     if self.writer is not None:
-                        # 名字可以不改，知道含义：
                         # classification: Accuracy/F1
                         # regression: Accuracy=R2, F1=R2（或者 Accuracy=-MSE）
                         self.writer.add_scalar('Accuracy_RRL', acc_b, cnt // TEST_CNT_MOD)

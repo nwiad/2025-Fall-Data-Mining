@@ -26,8 +26,6 @@ class ManualLinearRegression:
     使用闭式解求参数：
         w* = (X^T X + λ I)^(-1) X^T y
     这里 λ 是 L2 正则项（可选）。
-
-    我们不用 sklearn 的 LinearRegression，完全自己用 numpy 写。
     """
 
     def __init__(self, fit_intercept=True, l2_reg=0.0):
@@ -133,7 +131,7 @@ def main():
     print("[Info] Train shape:", X_train.shape, y_train.shape)
     print("[Info] Test  shape:", X_test.shape, y_test.shape)
 
-    # ---- 3.2 特征缩放（可选，但一般对线性模型有好处）----
+    # ---- 3.2 特征缩放----
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
@@ -144,7 +142,7 @@ def main():
 
     manual_lr = ManualLinearRegression(
         fit_intercept=True,
-        l2_reg=0.0,   # 可以改成 1e-3 看看效果
+        l2_reg=0.0,
     )
     manual_lr.fit(X_train_scaled, y_train)
 

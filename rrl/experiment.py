@@ -19,6 +19,7 @@ from rrl.models import RRL
 DATA_DIR = './dataset'
 
 def get_data_loader(dataset, world_size, rank, batch_size, k=0, pin_memory=False, save_best=True):
+    # 修改for housing
     data_path = os.path.join(DATA_DIR, dataset + '.data')
     info_path = os.path.join(DATA_DIR, dataset + '.info')
     X_df, y_df, f_df, label_pos = read_csv(data_path, info_path, shuffle=True)
@@ -27,7 +28,7 @@ def get_data_loader(dataset, world_size, rank, batch_size, k=0, pin_memory=False
     db_enc = DBEncoder(f_df, discrete=False)
     db_enc.fit(X_df, y_df)
 
-    # 注意这里我们忽略 transform 返回的 y_
+    # 忽略 transform 返回的 y_
     X_enc, _ = db_enc.transform(X_df, y_df, normalized=True, keep_stat=True)
 
     # 2️⃣ 用原始 y_df 作为连续标签
@@ -90,40 +91,6 @@ def get_data_loader(dataset, world_size, rank, batch_size, k=0, pin_memory=False
     )
 
     return db_enc, train_loader, valid_loader, test_loader
-
-# def get_data_loader(dataset, world_size, rank, batch_size, k=0, pin_memory=False, save_best=True):
-#     data_path = os.path.join(DATA_DIR, dataset + '.data')
-#     info_path = os.path.join(DATA_DIR, dataset + '.info')
-#     X_df, y_df, f_df, label_pos = read_csv(data_path, info_path, shuffle=True)
-
-#     db_enc = DBEncoder(f_df, discrete=False)
-#     db_enc.fit(X_df, y_df)
-
-#     X, y = db_enc.transform(X_df, y_df, normalized=True, keep_stat=True)
-
-#     kf = KFold(n_splits=5, shuffle=True, random_state=0)
-#     train_index, test_index = list(kf.split(X_df))[k]
-#     X_train = X[train_index]
-#     y_train = y[train_index]
-#     X_test = X[test_index]
-#     y_test = y[test_index]
-
-#     train_set = TensorDataset(torch.tensor(X_train.astype(np.float32)), torch.tensor(y_train.astype(np.float32)))
-#     test_set = TensorDataset(torch.tensor(X_test.astype(np.float32)), torch.tensor(y_test.astype(np.float32)))
-
-#     train_len = int(len(train_set) * 0.95)
-#     train_sub, valid_set = random_split(train_set, [train_len, len(train_set) - train_len])
-
-#     if save_best:  # use validation set for model selections.
-#         train_set = train_sub
-
-#     train_sampler = torch.utils.data.distributed.DistributedSampler(train_set, num_replicas=world_size, rank=rank)
-
-#     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=False, pin_memory=pin_memory, sampler=train_sampler)
-#     valid_loader = DataLoader(valid_set, batch_size=batch_size, shuffle=False, pin_memory=pin_memory)
-#     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, pin_memory=pin_memory)
-
-#     return db_enc, train_loader, valid_loader, test_loader
 
 
 def train_model(gpu, args):
@@ -228,10 +195,10 @@ def evaluate_regression(rrl, test_loader, device_id):
     with torch.no_grad():
         for X_batch, y_batch in test_loader:
             X_batch = X_batch.to(device)
-            # 前向传播，假设 rrl.net 是一个标准的 nn.Module
+            # 前向传播
             y_pred = rrl.net(X_batch)
 
-            # 假设输出和标签都是 (batch, 1) 或 (batch,)
+            # 输出和标签都是 (batch, 1) 或 (batch,)
             y_batch = y_batch.view(-1).cpu().numpy()
             y_pred = y_pred.view(-1).cpu().numpy()
 
@@ -257,7 +224,6 @@ def test_model(args):
     rrl = load_model(args.model, args.device_ids[0], log_file=args.test_res, distributed=False)
 
     dataset = args.data_set
-    # 测试阶段 world_size=1 即可，不需要用 4
     db_enc, train_loader, _, test_loader = get_data_loader(
         dataset, world_size=1, rank=0,
         batch_size=args.batch_size,
@@ -265,10 +231,10 @@ def test_model(args):
         save_best=False
     )
 
-    # ===== ① 不再调用 rrl.test（里面是分类评估，触发那些 warning） =====
+    # ===== ① 不再调用 rrl.test =====
     # rrl.test(test_loader=test_loader, set_name='Test')
 
-    # ===== ② 换成我们写的回归评估 =====
+    # ===== ② 回归评估 =====
     evaluate_regression(rrl, test_loader, device_id=args.device_ids[0])
 
     # ===== ③ 保留规则提取和可解释部分 =====
@@ -312,41 +278,6 @@ def test_model(args):
     safe_edge_cnt = max(edge_cnt, 1)
     logging.info('\n\t{} of RRL  Model: {}'.format(metric, np.log(safe_edge_cnt)))
     print(f"[Structure] #Edges = {edge_cnt}, Log(#Edges+eps) = {np.log(safe_edge_cnt):.4f}")
-
-# def test_model(args):
-#     rrl = load_model(args.model, args.device_ids[0], log_file=args.test_res, distributed=False)
-#     dataset = args.data_set
-#     db_enc, train_loader, _, test_loader = get_data_loader(dataset, 4, 0, args.batch_size, args.ith_kfold, save_best=False)
-#     rrl.test(test_loader=test_loader, set_name='Test')
-#     if args.print_rule:
-#         with open(args.rrl_file, 'w') as rrl_file:
-#             rule2weights = rrl.rule_print(db_enc.X_fname, db_enc.y_fname, train_loader, file=rrl_file, mean=db_enc.mean, std=db_enc.std)
-#     else:
-#         rule2weights = rrl.rule_print(db_enc.X_fname, db_enc.y_fname, train_loader, mean=db_enc.mean, std=db_enc.std, display=False)
-    
-#     metric = 'Log(#Edges)'
-#     edge_cnt = 0
-#     connected_rid = defaultdict(lambda: set())
-#     ln = len(rrl.net.layer_list) - 1
-#     for rid, w in rule2weights:
-#         connected_rid[ln - abs(rid[0])].add(rid[1])
-#     while ln > 1:
-#         ln -= 1
-#         layer = rrl.net.layer_list[ln]
-#         for r in connected_rid[ln]:
-#             con_len = len(layer.rule_list[0])
-#             if r >= con_len:
-#                 opt_id = 1
-#                 r -= con_len
-#             else:
-#                 opt_id = 0
-#             rule = layer.rule_list[opt_id][r]
-#             edge_cnt += len(rule)
-#             for rid in rule:
-#                 connected_rid[ln - abs(rid[0])].add(rid[1])
-#     logging.info('\n\t{} of RRL  Model: {}'.format(metric, np.log(edge_cnt)))
-
-
 
 def train_main(args):
     os.environ['MASTER_ADDR'] = args.master_address
